@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { addBook, filterBooks, updateBook } from '@/core/books'
+import { addBook, deleteBook, filterBooks, updateBook } from '@/core/books'
 import { loadBooks, saveBooks } from '@/core/storage'
 import type { Book, NewBook, StatusFilter } from '@/core/types'
 import AppHeader from './components/AppHeader.vue'
 import BookToolbar from './components/BookToolbar.vue'
 import BookList from './components/BookList.vue'
 import BookFormDialog from './components/BookFormDialog.vue'
+import ConfirmDeleteDialog from './components/ConfirmDeleteDialog.vue'
+import AppToast from './components/AppToast.vue'
 
 const books = ref<Book[]>(loadBooks())
 const query = ref('')
@@ -15,6 +17,9 @@ const statusFilter = ref<StatusFilter>('all')
 // Add/edit dialog: open or closed, and which book (null = a new book).
 const formOpen = ref(false)
 const editingBook = ref<Book | null>(null)
+// Delete confirmation: open while a book is set.
+const bookToDelete = ref<Book | null>(null)
+const toastMessage = ref<string | null>(null)
 
 // Derived, never stored: recalculated when books, query or filter change.
 const visibleBooks = computed(() =>
@@ -40,13 +45,27 @@ function closeForm(): void {
 }
 
 function saveForm(input: NewBook): void {
-  books.value = editingBook.value
-    ? updateBook(books.value, editingBook.value.id, input)
-    : addBook(books.value, input)
+  if (editingBook.value) {
+    books.value = updateBook(books.value, editingBook.value.id, input)
+    toastMessage.value = 'Book updated'
+  } else {
+    books.value = addBook(books.value, input)
+    toastMessage.value = 'Book added'
+  }
   closeForm()
 }
 
-function askDelete(_book: Book): void {}
+function askDelete(book: Book): void {
+  bookToDelete.value = book
+}
+
+function confirmDelete(): void {
+  if (bookToDelete.value) {
+    books.value = deleteBook(books.value, bookToDelete.value.id)
+    toastMessage.value = 'Book deleted'
+  }
+  bookToDelete.value = null
+}
 </script>
 
 <template>
@@ -58,6 +77,13 @@ function askDelete(_book: Book): void {}
     </main>
 
     <BookFormDialog v-if="formOpen" :book="editingBook" @save="saveForm" @cancel="closeForm" />
+    <ConfirmDeleteDialog
+      v-if="bookToDelete"
+      :book="bookToDelete"
+      @confirm="confirmDelete"
+      @cancel="bookToDelete = null"
+    />
+    <AppToast :message="toastMessage" @dismiss="toastMessage = null" />
   </div>
 </template>
 
